@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import time
 
-API_URL = "http://{}:8000/predict"
+API_URL = st.secrets["API_URL"]
 
 st.set_page_config(page_title="Sentiment Chat", page_icon="💬")
 
