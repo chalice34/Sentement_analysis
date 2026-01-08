@@ -3,19 +3,19 @@ import requests
 import time
 
 API_URL = st.secrets["API_URL"]
+FALLBACK_URL = st.secrets["FALLBACK_URL"]
 
 st.set_page_config(page_title="Sentiment Chat", page_icon="💬")
-
 st.title("💬 Sentiment Analyzer Chat")
 
 # ----------------------------
-# Session state for chat
+# Session state
 # ----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # ----------------------------
-# Display previous messages
+# Display history
 # ----------------------------
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -27,19 +27,23 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Type a sentence to analyze sentiment...")
 
 if user_input:
-    # Show user message
+    # User message
     st.session_state.messages.append(
         {"role": "user", "content": user_input}
     )
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Call API
+    final_text = ""
+
+    # ----------------------------
+    # Try PRIMARY API
+    # ----------------------------
     try:
         response = requests.post(
             API_URL,
             json={"text": user_input},
-            timeout=10
+            timeout=5
         )
         response.raise_for_status()
         result = response.json()
@@ -52,22 +56,43 @@ if user_input:
             f"**Confidence:** `{confidence}%`"
         )
 
-    except Exception as e:
-        final_text = f"❌ Error calling API:\n```\n{e}\n```"
+    # ----------------------------
+    # FALLBACK API
+    # ----------------------------
+    except Exception:
+        try:
+            fallback_response = requests.get(
+                FALLBACK_URL,
+                timeout=5
+            )
+            fallback_response.raise_for_status()
+
+            fallback_text = fallback_response.text.strip()
+
+            final_text = (
+                "⚠️ **Primary service is down**\n\n"
+                f"{fallback_text}"
+            )
+
+        except Exception:
+            final_text = (
+                "❌ **All services are currently unavailable.**\n\n"
+                "Please try again later."
+            )
 
     # ----------------------------
-    # Streaming / typing effect
+    # Streaming output
     # ----------------------------
     with st.chat_message("assistant"):
         placeholder = st.empty()
-        streamed_text = ""
+        streamed = ""
 
         for char in final_text:
-            streamed_text += char
-            placeholder.markdown(streamed_text)
-            time.sleep(0.015)  # typing speed
+            streamed += char
+            placeholder.markdown(streamed)
+            time.sleep(0.015)
 
-    # Save assistant message
+    # Save assistant response
     st.session_state.messages.append(
         {"role": "assistant", "content": final_text}
     )
